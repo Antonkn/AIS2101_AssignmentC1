@@ -1,0 +1,140 @@
+import numpy as np
+import random
+import matplotlib.pyplot as plt
+
+# Define number of taxis and customers (should be equal for binary PSO)
+n_taxis = 10
+n_customers = 10
+
+# Placeholder for taxi and customer coordinates
+taxi_coords = np.array([
+    [62.445065, 6.363705],  # Taxi 1 Blindheim
+    [62.463785, 6.316322],  # Taxi 2 Åse
+    [62.469085, 6.296914],  # Taxi 3 Lerstad
+    [62.466785, 6.247476],  # Taxi 4 Gåseid
+    [62.490453, 6.187149],  # Taxi 5 Ellingsøya
+    [62.471457, 6.169352],  # Taxi 6 Røysegata
+    [62.470427, 6.153346],  # Taxi 7 Terminalen
+    [62.471821, 6.159433],  # Taxi 8 Taxi stop
+    [62.475180, 6.153361],  # Taxi 9 Skateflukaia
+    [62.471659, 6.145111]   # Taxi 10 Ålesund kirke
+])
+
+customer_coords = np.array([
+    [62.465450, 6.097380],  # Customer 1 Atlanterhavsparken
+    [62.469946, 6.146647],  # Customer 2 Waterfront
+    [62.472285, 6.152212],  # Customer 3 Hotell brosundet
+    [62.473649, 6.158613],  # Customer 4 Scandic
+    [62.474332, 6.164636],  # Customer 5 Aksla
+    [62.472668, 6.164398],  # Customer 6 Bybadet
+    [62.470361, 6.187679],  # Customer 7 Color line
+    [62.472503, 6.236763],  # Customer 8 NTNU
+    [62.464722, 6.352749],  # Customer 9 Moa
+    [62.462312, 6.363146]   # Customer 10 Baronen
+])
+
+# Compute Euclidean distance matrix
+distance_matrix = np.zeros((n_taxis, n_customers))
+for i in range(n_taxis):
+    for j in range(n_customers):
+        distance_matrix[i, j] = np.linalg.norm(taxi_coords[i] - customer_coords[j])
+
+# PSO Parameters
+n_particles = 20
+max_iter = 100
+w = 0.7       # Inertia weight
+c1 = 1.5      # Cognitive coefficient
+c2 = 1.5      # Social coefficient
+
+# Initialize particles as random binary matrices
+particles = np.array([np.eye(n_taxis)[np.random.permutation(n_taxis)] for _ in range(n_particles)])
+velocities = np.zeros((n_particles, n_taxis, n_customers))
+
+# Cost function
+def evaluate(solution):
+    return np.sum(distance_matrix * solution)
+
+# Initialize best solutions
+p_best = particles.copy()
+p_best_scores = np.array([evaluate(p) for p in particles])
+g_best = particles[np.argmin(p_best_scores)]
+g_best_score = min(p_best_scores)
+
+# PSO main loop
+for it in range(max_iter):
+    for i in range(n_particles):
+        # Update velocity using binary PSO equation
+        velocities[i] = (w * velocities[i] +
+                         c1 * random.random() * (p_best[i] - particles[i]) +
+                         c2 * random.random() * (g_best - particles[i]))
+        
+        # Sigmoid function for probability conversion
+        prob = 1 / (1 + np.exp(-velocities[i]))
+        
+        # Generate new binary matrix
+        new_particle = (np.random.rand(n_taxis, n_customers) < prob).astype(int)
+        
+        # Ensure one-to-one assignment of taxis to customers
+        assigned_customers = set()
+        assigned_taxis = set()
+
+        # Step 1: Clear the matrix to avoid multiple assignments
+        new_particle[:, :] = 0
+
+        # Step 2: Assign each customer a unique taxi
+        for j in range(n_customers):  
+            available_taxis = list(set(range(n_taxis)) - assigned_taxis)  # Available taxis
+    
+            if available_taxis:  # Assign if there are available taxis
+                chosen_taxi = np.random.choice(available_taxis)
+                new_particle[chosen_taxi, j] = 1
+                assigned_taxis.add(chosen_taxi)
+                assigned_customers.add(j)
+
+        # Step 3: If unassigned taxis exist, assign them to the closest unassigned customer
+        unassigned_taxis = list(set(range(n_taxis)) - assigned_taxis)
+        unassigned_customers = list(set(range(n_customers)) - assigned_customers)
+
+        for i in range(min(len(unassigned_taxis), len(unassigned_customers))):
+            new_particle[unassigned_taxis[i], unassigned_customers[i]] = 1
+
+        
+        particles[i] = new_particle
+        
+        # Evaluate new solution
+        score = evaluate(particles[i])
+        
+        # Update personal best
+        if score < p_best_scores[i]:
+            p_best[i] = particles[i].copy()
+            p_best_scores[i] = score
+        
+        # Update global best
+        if score < g_best_score:
+            g_best = particles[i].copy()
+            g_best_score = score
+    
+    print(f"Iteration {it+1}: Best Cost = {g_best_score}")
+
+# Plot taxi and customer locations
+plt.figure(figsize=(8, 6))
+plt.scatter(customer_coords[:, 1], customer_coords[:, 0], c='red', marker='o', label='Customers')
+plt.scatter(taxi_coords[:, 1], taxi_coords[:, 0], c='blue', marker='s', label='Taxis')
+
+for i, txt in enumerate(range(n_customers)):
+    plt.annotate(f"C{txt+1}", (customer_coords[i, 1], customer_coords[i, 0]), fontsize=12, color='red')
+
+for i, txt in enumerate(range(n_taxis)):
+    plt.annotate(f"T{txt+1}", (taxi_coords[i, 1], taxi_coords[i, 0]), fontsize=12, color='blue')
+
+plt.xlabel('Longitude')
+plt.ylabel('Latitude')
+plt.title('Taxi and Customer Locations')
+plt.legend()
+plt.grid()
+plt.show()
+
+# Output best assignment
+print("Best Taxi Assignment:")
+print(g_best)
+print("Minimum Cost:", g_best_score)

@@ -1,0 +1,108 @@
+import numpy as np
+import matplotlib.pyplot as plt
+import random
+
+# Define cities and their coordinates
+cities = ["Oslo", "Bergen", "Trondheim", "Stavanger", "Ålesund", "Tromsø", "Otta", "Sogndal", "Alta", "Stranda"]
+x = np.array([10.7522, 5.3221, 10.3951, 5.7331, 6.1495, 18.9560, 9.5390, 7.0973, 23.2728, 6.9481])
+y = np.array([59.9139, 60.3913, 63.4305, 58.9690, 62.4722, 69.6496, 61.7715, 61.2291, 69.9633, 62.3100])
+n = len(cities)
+
+# Compute distance matrix using Euclidean distance
+D = np.zeros((n, n))
+for i in range(n-1):
+    for j in range(i+1, n):
+        D[i, j] = np.sqrt((x[i] - x[j])**2 + (y[i] - y[j])**2)
+        D[j, i] = D[i, j]
+
+# Initialize ACO parameters
+MaxIt = 50  # Maximum Iterations
+nAnt = 10  # Number of Ants
+Q = 1  # Pheromone deposit factor
+tau0 = 10  # Initial Pheromone
+tau = tau0 * np.ones((n, n))  # Pheromone matrix
+alpha = 1  # Pheromone influence
+rho = 0.1  # Evaporation rate
+BestCost = np.zeros(MaxIt)
+
+# Initialize best solution
+BestSol = {'Tour': None, 'Cost': float('inf')}
+
+# Function to select next city based on probability
+def roulette_wheel_selection(prob):
+    cumulative = np.cumsum(prob)
+    r = random.random()
+    for i, value in enumerate(cumulative):
+        if r <= value:
+            return i
+    return len(prob) - 1
+
+# Function to plot the best solution
+def plot_solution(tour):
+    plt.figure(figsize=(8, 6))
+    plt.scatter(x, y, c='red', marker='o', label='Cities')
+    
+    for i, name in enumerate(cities):
+        plt.text(x[i], y[i], name, fontsize=12, ha='right')
+    
+    for i in range(len(tour)-1):
+        plt.plot([x[tour[i]], x[tour[i+1]]], [y[tour[i]], y[tour[i+1]]], 'b-', linewidth=2)
+    
+    plt.plot([x[tour[-1]], x[tour[0]]], [y[tour[-1]], y[tour[0]]], 'b-', linewidth=2)
+    plt.xlabel('Longitude')
+    plt.ylabel('Latitude')
+    plt.title('Best Tour')
+    plt.grid()
+    plt.show()
+
+# ACO main loop
+for it in range(MaxIt):
+    ants = []
+    
+    for k in range(nAnt):
+        tour = []
+        available = list(range(n))
+        start = random.choice(available)
+        tour.append(start)
+        available.remove(start)
+        
+        for _ in range(n-1):
+            P = tau[tour[-1], available] ** alpha
+            P /= P.sum()
+            next_city = available[roulette_wheel_selection(P)]
+            tour.append(next_city)
+            available.remove(next_city)
+        
+        # Calculate tour cost
+        cost = sum(D[tour[i], tour[i+1]] for i in range(n-1)) + D[tour[-1], tour[0]]
+        
+        ants.append({'Tour': tour, 'Cost': cost})
+        
+        if cost < BestSol['Cost']:
+            BestSol = {'Tour': tour, 'Cost': cost}
+    
+    # Update pheromone
+    for k in range(nAnt):
+        for i in range(n-1):
+            tau[ants[k]['Tour'][i], ants[k]['Tour'][i+1]] += Q / ants[k]['Cost']
+        tau[ants[k]['Tour'][-1], ants[k]['Tour'][0]] += Q / ants[k]['Cost']
+    
+    tau *= (1 - rho)  # Evaporation
+    BestCost[it] = BestSol['Cost']
+    
+    print(f"Iteration {it+1}: Best Cost = {BestCost[it]}")
+    
+    # Plot intermediate solutions
+    plot_solution(BestSol['Tour'])
+
+# Plot best cost over iterations
+plt.figure(figsize=(8, 6))
+plt.plot(BestCost, linewidth=2)
+plt.xlabel('Iteration')
+plt.ylabel('Best Cost')
+plt.title('ACO Optimization Progress')
+plt.grid()
+plt.show()
+
+# Final best tour visualization
+plot_solution(BestSol['Tour'])
